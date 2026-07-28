@@ -1,0 +1,141 @@
+trigger:
+- main
+
+pool: rike-agent-pool
+
+stages:
+- stage: BuildDockerStage
+  displayName: Build Docker Stage
+  jobs:
+  - job: DockerBuild
+    displayName: Docker Build
+    steps:
+    - task: Docker@2
+      displayName: Build Backend Image
+      inputs:
+        containerRegistry: 'svc-docker'
+        repository: 'rishikejriwal/employee-backend'
+        command: 'build'
+        Dockerfile: 'backend/Dockerfile'
+        tags: 'latest'
+
+    - task: Docker@2
+      displayName: Build Frontend Image
+      inputs:
+        containerRegistry: 'svc-docker'
+        repository: 'rishikejriwal/employee-frontend'
+        command: 'build'
+        Dockerfile: 'frontend/Dockerfile'
+        tags: 'latest'
+
+    - task: Docker@2
+      displayName: Push Backend Image
+      inputs:
+        containerRegistry: 'svc-docker'
+        repository: 'rishikejriwal/employee-backend'
+        command: 'push'
+        tags: 'latest'
+
+    - task: Docker@2
+      displayName: Push Frontend Image
+      inputs:
+        containerRegistry: 'svc-docker'
+        repository: 'rishikejriwal/employee-frontend'
+        command: 'push'
+        tags: 'latest'
+
+- stage: deploy
+  displayName: deploy stage
+  dependsOn: BuildDockerStage
+  jobs:
+  - job: Deploy
+    steps:
+    - task: SSH@0
+      displayName: Docker Install
+      inputs:
+        sshEndpoint: 'ssh-vm'
+        runOptions: inline
+        inline: |
+          if ! command -v docker >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+          fi
+
+          sudo systemctl enable docker
+          sudo systemctl start docker
+
+          docker --version
+
+    - task: SSH@0
+      displayName: Pull Docker Images
+      inputs:
+        sshEndpoint: 'ssh-vm'
+        runOptions: inline
+        inline: |
+          sudo docker pull postgres:16-alpine
+          sudo docker pull rishikejriwal/employee-backend:latest
+          sudo docker pull rishikejriwal/employee-frontend:latest
+        readyTimeout: '20000'
+
+    - task: SSH@0
+      displayName: Run PostgreSQL Container
+      inputs:
+        sshEndpoint: 'ssh-vm'
+        runOptions: inline
+        inline: |
+          sudo docker stop employee-postgres || true
+          sudo docker rm employee-postgres || true
+
+          sudo docker volume create postgres_data
+
+          sudo docker run -d \
+            --name employee-postgres \
+            -p 5432:5432 \
+            -e POSTGRES_DB=$(POSTGRES_DB) \
+            -e POSTGRES_USER=$(POSTGRES_USER) \
+            -e POSTGRES_PASSWORD=$(POSTGRES_PASSWORD) \
+            -v postgres_data:/var/lib/postgresql/data \
+            postgres:16-alpine
+
+        readyTimeout: '20000'
+
+    - task: SSH@0
+      displayName: Run Backend Container
+      inputs:
+        sshEndpoint: 'ssh-vm'
+        runOptions: inline
+        inline: |
+          sudo docker stop employee-backend || true
+          sudo docker rm employee-backend || true
+
+          sudo docker run -d \
+            --name employee-backend \
+            -p 8080:8080 \
+            -e SPRING_DATASOURCE_URL=$(SPRING_DATASOURCE_URL) \
+            -e SPRING_DATASOURCE_USERNAME=$(SPRING_DATASOURCE_USERNAME) \
+            -e SPRING_DATASOURCE_PASSWORD=$(SPRING_DATASOURCE_PASSWORD) \
+            rishikejriwal/employee-backend:latest
+
+        readyTimeout: '20000'
+
+    - task: SSH@0
+      displayName: Run Frontend Container
+      inputs:
+        sshEndpoint: 'ssh-vm'
+        runOptions: inline
+        inline: |
+          sudo docker stop employee-frontend || true
+          sudo docker rm employee-frontend || true
+
+          sudo docker run -d \
+            --name employee-frontend \
+            --network backend-net \
+            -p 8081:80 \
+            rishikejriwal/employee-frontend:latest
+
+        readyTimeout: '20000'
+
+      
+    
+    
+
