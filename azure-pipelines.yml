@@ -111,6 +111,7 @@ stages:
           sudo docker run -d \
             --name employee-postgres \
             --network employee-network \
+            --network-alias postgres \
             -p 5432:5432 \
             -e POSTGRES_DB=$(POSTGRES_DB) \
             -e POSTGRES_USER=$(POSTGRES_USER) \
@@ -137,6 +138,7 @@ stages:
           sudo docker run -d \
             --name employee-backend \
             --network employee-network \
+            --network-alias backend \
             -p 8080:8080 \
             -e SPRING_DATASOURCE_URL=$(SPRING_DATASOURCE_URL) \
             -e SPRING_DATASOURCE_USERNAME=$(SPRING_DATASOURCE_USERNAME) \
