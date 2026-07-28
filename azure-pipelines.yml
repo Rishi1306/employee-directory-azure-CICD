@@ -65,12 +65,16 @@ stages:
     displayName: Trivy Image Scan
     steps:
     - script: |
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-          aquasec/trivy image rishikejriwal/employee-backend:$(imageTag)
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-          aquasec/trivy image rishikejriwal/employee-frontend:$(imageTag)
-      displayName: 'Scan Docker Images with Trivy'
+        choco install trivy -y
+      displayName: 'Install Trivy'
 
+    - script: |
+        trivy image rishikejriwal/employee-backend:$(imageTag)
+      displayName: 'Scan Backend Image with Trivy'
+
+    - script: |
+        trivy image rishikejriwal/employee-frontend:$(imageTag)
+      displayName: 'Scan Frontend Image with Trivy'
 - stage: deploy
   displayName: deploy stage
   dependsOn:
