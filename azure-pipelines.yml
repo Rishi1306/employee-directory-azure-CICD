@@ -70,6 +70,13 @@ stages:
           docker --version
 
     - task: SSH@0
+      displayName: Create Docker Network
+      inputs:
+        sshEndpoint: 'ssh-vm'
+        runOptions: inline
+        inline: |
+          sudo docker network create employee-network || true
+    - task: SSH@0
       displayName: Pull Docker Images
       inputs:
         sshEndpoint: 'ssh-vm'
@@ -98,6 +105,7 @@ stages:
 
           sudo docker run -d \
             --name employee-postgres \
+            --network employee-network \
             -p 5432:5432 \
             -e POSTGRES_DB=$(POSTGRES_DB) \
             -e POSTGRES_USER=$(POSTGRES_USER) \
@@ -123,6 +131,7 @@ stages:
 
           sudo docker run -d \
             --name employee-backend \
+            --network employee-network \
             -p 8080:8080 \
             -e SPRING_DATASOURCE_URL=$(SPRING_DATASOURCE_URL) \
             -e SPRING_DATASOURCE_USERNAME=$(SPRING_DATASOURCE_USERNAME) \
@@ -147,6 +156,7 @@ stages:
 
           sudo docker run -d \
             --name employee-frontend \
+            --network employee-network \
             -p 8081:80 \
             rishikejriwal/employee-frontend:latest
 
