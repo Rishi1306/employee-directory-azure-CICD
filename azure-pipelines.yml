@@ -75,7 +75,12 @@ stages:
         sshEndpoint: 'ssh-vm'
         runOptions: inline
         inline: |
-          sudo docker network create employee-network || true
+          if ! sudo docker network ls --format '{{.Name}}' | grep -q '^employee-network$'; then
+            sudo docker network create employee-network
+            echo "Network created"
+          else
+            echo "Network already exists"
+          fi
     - task: SSH@0
       displayName: Pull Docker Images
       inputs:
