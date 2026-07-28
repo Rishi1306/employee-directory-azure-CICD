@@ -1,0 +1,173 @@
+trigger:
+- main
+
+pool: rike-agent-pool
+
+variables:
+- group: employee-app-vars
+
+stages:
+- stage: BuildDockerStage
+  displayName: Build Docker Stage
+  jobs:
+  - job: DockerBuild
+    displayName: Docker Build
+    steps:
+    - task: Docker@2
+      displayName: Build Backend Image
+      inputs:
+        containerRegistry: 'svc-docker'
+        repository: 'rishikejriwal/employee-backend'
+        command: 'build'
+        Dockerfile: 'backend/Dockerfile'
+        tags: 'latest'
+
+    - task: Docker@2
+      displayName: Build Frontend Image
+      inputs:
+        containerRegistry: 'svc-docker'
+        repository: 'rishikejriwal/employee-frontend'
+        command: 'build'
+        Dockerfile: 'frontend/Dockerfile'
+        tags: 'latest'
+
+    - task: Docker@2
+      displayName: Push Backend Image
+      inputs:
+        containerRegistry: 'svc-docker'
+        repository: 'rishikejriwal/employee-backend'
+        command: 'push'
+        tags: 'latest'
+
+    - task: Docker@2
+      displayName: Push Frontend Image
+      inputs:
+        containerRegistry: 'svc-docker'
+        repository: 'rishikejriwal/employee-frontend'
+        command: 'push'
+        tags: 'latest'
+
+- stage: deploy
+  displayName: deploy stage
+  dependsOn: BuildDockerStage
+  jobs:
+  - job: Deploy
+    steps:
+    - task: SSH@0
+      displayName: Docker Install
+      inputs:
+        sshEndpoint: 'ssh-vm'
+        runOptions: inline
+        inline: |
+          if ! command -v docker >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+          fi
+
+          sudo systemctl enable docker
+          sudo systemctl start docker
+
+          docker --version
+
+    - task: SSH@0
+      displayName: Create Docker Network
+      inputs:
+        sshEndpoint: 'ssh-vm'
+        runOptions: inline
+        inline: |
+          if ! sudo docker network ls --format '{{.Name}}' | grep -q '^employee-network$'; then
+            sudo docker network create employee-network
+            echo "Network created"
+          else
+            echo "Network already exists"
+          fi
+    - task: SSH@0
+      displayName: Pull Docker Images
+      inputs:
+        sshEndpoint: 'ssh-vm'
+        runOptions: inline
+        inline: |
+          sudo docker pull postgres:16-alpine
+          sudo docker pull rishikejriwal/employee-backend:latest
+          sudo docker pull rishikejriwal/employee-frontend:latest
+        readyTimeout: '20000'
+
+    - task: SSH@0
+      displayName: Run PostgreSQL Container
+      inputs:
+        sshEndpoint: 'ssh-vm'
+        runOptions: inline
+        inline: |
+          if sudo docker ps -a --format '{{.Names}}' | grep -q '^employee-postgres$'; then
+            echo "Stopping existing PostgreSQL container..."
+            sudo docker stop employee-postgres
+            sudo docker rm employee-postgres
+          else
+            echo "No existing PostgreSQL container found."
+          fi
+
+          sudo docker volume create postgres_data
+
+          sudo docker run -d \
+            --name employee-postgres \
+            --network employee-network \
+            -p 5432:5432 \
+            -e POSTGRES_DB=$(POSTGRES_DB) \
+            -e POSTGRES_USER=$(POSTGRES_USER) \
+            -e POSTGRES_PASSWORD=$(POSTGRES_PASSWORD) \
+            -v postgres_data:/var/lib/postgresql/data \
+            postgres:16-alpine
+
+        readyTimeout: '20000'
+
+    - task: SSH@0
+      displayName: Run Backend Container
+      inputs:
+        sshEndpoint: 'ssh-vm'
+        runOptions: inline
+        inline: |
+          if sudo docker ps -a --format '{{.Names}}' | grep -q '^employee-backend$'; then
+            echo "Stopping existing backend container..."
+            sudo docker stop employee-backend
+            sudo docker rm employee-backend
+          else
+            echo "No existing backend container found."
+          fi
+
+          sudo docker run -d \
+            --name employee-backend \
+            --network employee-network \
+            -p 8080:8080 \
+            -e SPRING_DATASOURCE_URL=$(SPRING_DATASOURCE_URL) \
+            -e SPRING_DATASOURCE_USERNAME=$(SPRING_DATASOURCE_USERNAME) \
+            -e SPRING_DATASOURCE_PASSWORD=$(SPRING_DATASOURCE_PASSWORD) \
+            rishikejriwal/employee-backend:latest
+
+        readyTimeout: '20000'
+
+    - task: SSH@0
+      displayName: Run Frontend Container
+      inputs:
+        sshEndpoint: 'ssh-vm'
+        runOptions: inline
+        inline: |
+          if sudo docker ps -a --format '{{.Names}}' | grep -q '^employee-frontend$'; then
+            echo "Stopping existing frontend container..."
+            sudo docker stop employee-frontend
+            sudo docker rm employee-frontend
+          else
+            echo "No existing frontend container found."
+          fi
+
+          sudo docker run -d \
+            --name employee-frontend \
+            --network employee-network \
+            -p 8081:80 \
+            rishikejriwal/employee-frontend:latest
+
+        readyTimeout: '20000'
+
+      
+    
+    
+
