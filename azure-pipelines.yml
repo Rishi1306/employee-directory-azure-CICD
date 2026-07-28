@@ -1,10 +1,20 @@
 trigger:
-- main
+  branches:
+    include:
+      - main
+      - feature/*
+  paths:
+    include:
+      - backend/*
+      - frontend/*
+      - azure-pipelines.yml
 
 pool: rike-agent-pool
 
 variables:
 - group: employee-app-vars
+- name: imageTag
+  value: '$(Build.BuildId)'
 
 stages:
 - stage: BuildDockerStage
@@ -20,7 +30,7 @@ stages:
         repository: 'rishikejriwal/employee-backend'
         command: 'build'
         Dockerfile: 'backend/Dockerfile'
-        tags: 'latest'
+        tags: '$(imageTag)'
 
     - task: Docker@2
       displayName: Build Frontend Image
@@ -29,7 +39,7 @@ stages:
         repository: 'rishikejriwal/employee-frontend'
         command: 'build'
         Dockerfile: 'frontend/Dockerfile'
-        tags: 'latest'
+        tags: '$(imageTag)'
 
     - task: Docker@2
       displayName: Push Backend Image
@@ -37,7 +47,7 @@ stages:
         containerRegistry: 'svc-docker'
         repository: 'rishikejriwal/employee-backend'
         command: 'push'
-        tags: 'latest'
+        tags: '$(imageTag)'
 
     - task: Docker@2
       displayName: Push Frontend Image
@@ -45,11 +55,28 @@ stages:
         containerRegistry: 'svc-docker'
         repository: 'rishikejriwal/employee-frontend'
         command: 'push'
-        tags: 'latest'
+        tags: '$(imageTag)'
+
+- stage: SecurityScanStage
+  displayName: Security Scan
+  dependsOn: BuildDockerStage
+  jobs:
+  - job: TrivyScan
+    displayName: Trivy Image Scan
+    steps:
+    - script: |
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+          aquasec/trivy image rishikejriwal/employee-backend:$(imageTag)
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+          aquasec/trivy image rishikejriwal/employee-frontend:$(imageTag)
+      displayName: 'Scan Docker Images with Trivy'
 
 - stage: deploy
   displayName: deploy stage
-  dependsOn: BuildDockerStage
+  dependsOn:
+    - BuildDockerStage
+    - SecurityScanStage
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
   jobs:
   - job: Deploy
     steps:
@@ -88,8 +115,8 @@ stages:
         runOptions: inline
         inline: |
           sudo docker pull postgres:16-alpine
-          sudo docker pull rishikejriwal/employee-backend:latest
-          sudo docker pull rishikejriwal/employee-frontend:latest
+          sudo docker pull rishikejriwal/employee-backend:$(imageTag)
+          sudo docker pull rishikejriwal/employee-frontend:$(imageTag)
         readyTimeout: '20000'
 
     - task: SSH@0
@@ -143,7 +170,7 @@ stages:
             -e SPRING_DATASOURCE_URL=$(SPRING_DATASOURCE_URL) \
             -e SPRING_DATASOURCE_USERNAME=$(SPRING_DATASOURCE_USERNAME) \
             -e SPRING_DATASOURCE_PASSWORD=$(SPRING_DATASOURCE_PASSWORD) \
-            rishikejriwal/employee-backend:latest
+            rishikejriwal/employee-backend:$(imageTag)
 
         readyTimeout: '20000'
 
@@ -165,7 +192,7 @@ stages:
             --name employee-frontend \
             --network employee-network \
             -p 8081:80 \
-            rishikejriwal/employee-frontend:latest
+            rishikejriwal/employee-frontend:$(imageTag)
 
         readyTimeout: '20000'
 
