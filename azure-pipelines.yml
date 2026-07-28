@@ -65,10 +65,6 @@ stages:
     displayName: Trivy Image Scan
     steps:
     - script: |
-        choco install trivy -y
-      displayName: 'Install Trivy'
-
-    - script: |
         trivy image rishikejriwal/employee-backend:$(imageTag)
       displayName: 'Scan Backend Image with Trivy'
 
