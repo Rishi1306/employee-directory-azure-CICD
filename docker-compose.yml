@@ -14,7 +14,7 @@ services:
       - backend-net   
 
   backend:
-    build: ./backend
+    image: rishikejriwal/employee-backend:latest
     container_name: employee-backend
     ports:
       -"8080:8080"   
@@ -26,7 +26,7 @@ services:
       - postgres
 
 frontend:
-    build: ./frontend
+    image: rishikejriwal/employee-frontend:latest
     container_name: employee-frontend
     ports:
       - "8081:80"
