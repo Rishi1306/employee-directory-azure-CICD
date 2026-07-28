@@ -86,8 +86,13 @@ stages:
         sshEndpoint: 'ssh-vm'
         runOptions: inline
         inline: |
-          sudo docker stop employee-postgres || true
-          sudo docker rm employee-postgres || true
+          if sudo docker ps -a --format '{{.Names}}' | grep -q '^employee-postgres$'; then
+            echo "Stopping existing PostgreSQL container..."
+            sudo docker stop employee-postgres
+            sudo docker rm employee-postgres
+          else
+            echo "No existing PostgreSQL container found."
+          fi
 
           sudo docker volume create postgres_data
 
@@ -108,8 +113,13 @@ stages:
         sshEndpoint: 'ssh-vm'
         runOptions: inline
         inline: |
-          sudo docker stop employee-backend || true
-          sudo docker rm employee-backend || true
+          if sudo docker ps -a --format '{{.Names}}' | grep -q '^employee-backend$'; then
+            echo "Stopping existing backend container..."
+            sudo docker stop employee-backend
+            sudo docker rm employee-backend
+          else
+            echo "No existing backend container found."
+          fi
 
           sudo docker run -d \
             --name employee-backend \
@@ -127,8 +137,13 @@ stages:
         sshEndpoint: 'ssh-vm'
         runOptions: inline
         inline: |
-          sudo docker stop employee-frontend || true
-          sudo docker rm employee-frontend || true
+          if sudo docker ps -a --format '{{.Names}}' | grep -q '^employee-frontend$'; then
+            echo "Stopping existing frontend container..."
+            sudo docker stop employee-frontend
+            sudo docker rm employee-frontend
+          else
+            echo "No existing frontend container found."
+          fi
 
           sudo docker run -d \
             --name employee-frontend \
