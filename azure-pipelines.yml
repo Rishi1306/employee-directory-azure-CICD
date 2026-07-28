@@ -147,7 +147,6 @@ stages:
 
           sudo docker run -d \
             --name employee-frontend \
-            --network backend-net \
             -p 8081:80 \
             rishikejriwal/employee-frontend:latest
 
