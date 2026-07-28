@@ -65,7 +65,7 @@ stages:
     displayName: Trivy Image Scan
     steps:
     - script: |
-        trivy image --scanners vuln rishikejriwal/employee-backend:85$(imageTag)
+        trivy image --scanners vuln rishikejriwal/employee-backend:$(imageTag)
       displayName: 'Scan Backend Image with Trivy'
 
     - script: |
